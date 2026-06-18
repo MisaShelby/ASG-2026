@@ -1,0 +1,3 @@
+cd ~/Documents/PPC/ASG-2026/backend
+source venv/bin/activate
+sudo -u postgres psql
