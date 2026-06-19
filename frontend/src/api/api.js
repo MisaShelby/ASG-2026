@@ -35,4 +35,11 @@ export const createAlignment = (payload) => api.post("/alignments/", payload);
 export const listAlignments = () => api.get("/alignments/");
 export const getAlignment = (id) => api.get(`/alignments/${id}/`);
 
+// --- Lot 3 : assemblage de novo ---
+export const createAssembly = (payload) => api.post("/assemblies/", payload);
+export const listAssemblies = () => api.get("/assemblies/");
+export const getAssembly = (id) => api.get(`/assemblies/${id}/`);
+export const assemblyContigsUrl = (id) =>
+    `${api.defaults.baseURL}/assemblies/${id}/contigs.fasta/`;
+
 export default api;
