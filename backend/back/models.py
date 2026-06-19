@@ -148,3 +148,45 @@ class KmerSpectrumBin(models.Model):
 
     def __str__(self):
         return f"mult={self.multiplicity} -> {self.distinct_count}"
+
+
+# =====================================================================
+#  Lot 2 — Alignement par programmation dynamique (overlap alignment)
+# =====================================================================
+class AlignmentRun(models.Model):
+    """Un calcul d'alignement de chevauchement entre deux reads (A et B)."""
+
+    read_a_label = models.CharField(max_length=255)
+    read_a_sequence = models.TextField()
+    dataset_a = models.ForeignKey(
+        Dataset, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="alignments_as_a",
+    )
+    read_a_index = models.IntegerField(null=True, blank=True)
+
+    read_b_label = models.CharField(max_length=255)
+    read_b_sequence = models.TextField()
+    dataset_b = models.ForeignKey(
+        Dataset, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="alignments_as_b",
+    )
+    read_b_index = models.IntegerField(null=True, blank=True)
+
+    # Score pondéré : match=+1, mismatch=-1, gap=-2
+    score = models.IntegerField()
+    read_a_start = models.IntegerField(null=True, blank=True)
+    read_a_end = models.IntegerField(null=True, blank=True)
+    read_b_start = models.IntegerField(null=True, blank=True)
+    read_b_end = models.IntegerField(null=True, blank=True)
+
+    aligned_a = models.TextField()
+    match_line = models.TextField()
+    aligned_b = models.TextField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.read_a_label} x {self.read_b_label} (score={self.score})"

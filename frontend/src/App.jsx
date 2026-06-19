@@ -11,6 +11,9 @@ import UploadPage from './pages/UploadPage'
 import DatasetDetailPage from './pages/DatasetDetailPage'
 import KmerPage from './pages/KmerPage'
 import SpectrumPage from './pages/SpectrumPage'
+import AlignmentPage from './pages/AlignmentPage'
+import AlignmentHistoryPage from './pages/AlignmentHistoryPage'
+import AlignmentDetailPage from './pages/AlignmentDetailPage'
 
 function App() {
   return (
@@ -24,6 +27,8 @@ function App() {
           </Typography>
           <Button color="inherit" component={RouterLink} to="/">Datasets</Button>
           <Button color="inherit" component={RouterLink} to="/upload">Importer</Button>
+          <Button color="inherit" component={RouterLink} to="/alignment">Alignement</Button>
+          <Button color="inherit" component={RouterLink} to="/alignments">Historique</Button>
         </Toolbar>
       </AppBar>
 
@@ -34,6 +39,9 @@ function App() {
           <Route path="/datasets/:id" element={<DatasetDetailPage />} />
           <Route path="/datasets/:id/kmers" element={<KmerPage />} />
           <Route path="/kmer-analyses/:id/spectrum" element={<SpectrumPage />} />
+          <Route path="/alignment" element={<AlignmentPage />} />
+          <Route path="/alignments" element={<AlignmentHistoryPage />} />
+          <Route path="/alignments/:id" element={<AlignmentDetailPage />} />
         </Routes>
       </main>
     </div>

@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from .models import (
+    AlignmentRun,
     Dataset,
     FastaConversion,
     KmerAnalysis,
@@ -87,3 +88,88 @@ class KmerAnalysisSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["dataset", "total_kmers", "distinct_kmers", "created_at"]
+
+
+# =====================================================================
+#  Lot 2 — Alignement de chevauchement
+# =====================================================================
+MAX_READ_LENGTH = 5000
+
+
+class ReadPreviewSerializer(serializers.Serializer):
+    """Aperçu d'un read pour le sélecteur frontend (pas un modèle)."""
+
+    index = serializers.IntegerField()
+    identifier = serializers.CharField()
+    length = serializers.IntegerField()
+    preview = serializers.CharField()
+
+
+class ReadDetailSerializer(serializers.Serializer):
+    """Read complet (identifiant + séquence) récupéré par index."""
+
+    index = serializers.IntegerField()
+    identifier = serializers.CharField()
+    sequence = serializers.CharField()
+    length = serializers.IntegerField()
+
+
+class ReadInputSerializer(serializers.Serializer):
+    """Un read fourni soit par référence (dataset+index), soit en saisie libre."""
+
+    dataset = serializers.PrimaryKeyRelatedField(
+        queryset=Dataset.objects.all(), required=False, allow_null=True
+    )
+    index = serializers.IntegerField(required=False, allow_null=True, min_value=0)
+    sequence = serializers.CharField(required=False, allow_blank=True, trim_whitespace=True)
+
+    def validate(self, attrs):
+        has_ref = attrs.get("dataset") is not None and attrs.get("index") is not None
+        has_sequence = bool(attrs.get("sequence"))
+        if has_ref == has_sequence:
+            raise serializers.ValidationError(
+                "Fournir soit 'dataset' + 'index', soit 'sequence' (l'un des deux, pas les deux)."
+            )
+        if has_sequence:
+            cleaned = "".join(attrs["sequence"].split()).upper()
+            if not cleaned:
+                raise serializers.ValidationError("La séquence saisie est vide.")
+            if len(cleaned) > MAX_READ_LENGTH:
+                raise serializers.ValidationError(
+                    f"Séquence trop longue ({len(cleaned)} nt) — limite {MAX_READ_LENGTH} nt."
+                )
+            attrs["sequence"] = cleaned
+        return attrs
+
+
+class AlignmentCreateSerializer(serializers.Serializer):
+    """Payload de création d'un alignement : deux reads (A et B)."""
+
+    read_a = ReadInputSerializer()
+    read_b = ReadInputSerializer()
+
+
+class AlignmentRunSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AlignmentRun
+        fields = [
+            "id",
+            "read_a_label",
+            "read_a_sequence",
+            "dataset_a",
+            "read_a_index",
+            "read_b_label",
+            "read_b_sequence",
+            "dataset_b",
+            "read_b_index",
+            "score",
+            "read_a_start",
+            "read_a_end",
+            "read_b_start",
+            "read_b_end",
+            "aligned_a",
+            "match_line",
+            "aligned_b",
+            "created_at",
+        ]
+        read_only_fields = fields

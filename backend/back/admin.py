@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from .models import (
+    AlignmentRun,
     Dataset,
     FastaConversion,
     KmerAnalysis,
@@ -49,3 +50,9 @@ class KmerCountAdmin(admin.ModelAdmin):
 @admin.register(KmerSpectrumBin)
 class KmerSpectrumBinAdmin(admin.ModelAdmin):
     list_display = ("analysis", "multiplicity", "distinct_count")
+
+
+@admin.register(AlignmentRun)
+class AlignmentRunAdmin(admin.ModelAdmin):
+    list_display = ("id", "read_a_label", "read_b_label", "score", "created_at")
+    search_fields = ("read_a_label", "read_b_label")

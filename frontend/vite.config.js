@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
 
   server: {
-    host: '0.0.0.0',
-    allowedHosts: ['asg-local.wip']
+    host: 'asg-local.wip',
+    port: 5173
   }
 })

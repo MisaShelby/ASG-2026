@@ -26,4 +26,13 @@ export const getTopKmers = (id) => api.get(`/kmer-analyses/${id}/top/`);
 // --- Q3 : spectre / histogramme ---
 export const getKmerSpectrum = (id) => api.get(`/kmer-analyses/${id}/spectrum/`);
 
+// --- Lot 2 : alignement de chevauchement ---
+export const listDatasetReads = (datasetId, params) =>
+    api.get(`/datasets/${datasetId}/reads/`, { params });
+export const getDatasetRead = (datasetId, index) =>
+    api.get(`/datasets/${datasetId}/reads/${index}/`);
+export const createAlignment = (payload) => api.post("/alignments/", payload);
+export const listAlignments = () => api.get("/alignments/");
+export const getAlignment = (id) => api.get(`/alignments/${id}/`);
+
 export default api;

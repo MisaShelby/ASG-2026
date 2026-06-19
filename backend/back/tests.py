@@ -1,8 +1,12 @@
 import io
+from unittest.mock import patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from rest_framework.test import APIClient
 
-from .services import fasta_converter, kmer, quality
+from .models import AlignmentRun, Dataset
+from .services import alignment, fasta_converter, kmer, quality, read_access
 from .services.fastq_parser import decode_quality, parse_fasta, parse_fastq
 
 FASTQ_SAMPLE = """@read1
@@ -91,3 +95,181 @@ class KmerTests(TestCase):
     def test_invalid_k(self):
         with self.assertRaises(ValueError):
             kmer.count_kmers([], 0)
+
+
+class OverlapAlignTests(TestCase):
+    """Lot 2 — alignement de chevauchement (overlap, bords libres)."""
+
+    def test_clean_overlap_no_error(self):
+        # suffixe de A "CCCC" == préfixe de B "CCCC" : chevauchement net
+        result = alignment.overlap_align("AAAACCCC", "CCCCGGGG")
+        self.assertEqual(result["score"], 4)
+        self.assertEqual((result["a_start"], result["a_end"]), (5, 8))
+        self.assertEqual((result["b_start"], result["b_end"]), (1, 4))
+        self.assertEqual(result["match_line"], "||||")
+
+    def test_overlap_with_one_mismatch(self):
+        # suffixe de A "CCCT" vs préfixe de B "CCCC" : 1 erreur tolérée
+        result = alignment.overlap_align("AAAACCCT", "CCCCGGGG")
+        # 3 matches (+1) + 1 mismatch (-1) = 2
+        self.assertEqual(result["score"], 2)
+        self.assertEqual(result["match_line"], "|||.")
+
+    def test_no_overlap(self):
+        result = alignment.overlap_align("AAAA", "GGGG")
+        self.assertEqual(result["score"], 0)
+        self.assertIsNone(result["a_start"])
+        self.assertEqual(result["aligned_a"], "")
+
+    def test_full_containment(self):
+        # A entièrement contenu au milieu de B (pas seulement à un bord)
+        result = alignment.overlap_align("CCCC", "AACCCCGG")
+        self.assertEqual(result["score"], 4)
+        self.assertEqual((result["a_start"], result["a_end"]), (1, 4))
+        self.assertEqual((result["b_start"], result["b_end"]), (3, 6))
+
+
+FASTQ_TWO_READS = """@r1
+AAAACCCC
++
+IIIIIIII
+@r2
+CCCCGGGG
++
+IIIIIIII
+"""
+
+
+class ReadAccessTests(TestCase):
+    def setUp(self):
+        self.dataset = Dataset.objects.create(
+            name="ds",
+            original_filename="ds.fastq",
+            file=SimpleUploadedFile("ds.fastq", FASTQ_TWO_READS.encode()),
+            input_format=Dataset.Format.FASTQ,
+        )
+
+    def test_get_read_at(self):
+        read = read_access.get_read_at(self.dataset, 1)
+        self.assertEqual(read.identifier, "r2")
+        self.assertEqual(read.sequence, "CCCCGGGG")
+
+    def test_get_read_at_out_of_range(self):
+        with self.assertRaises(IndexError):
+            read_access.get_read_at(self.dataset, 5)
+
+    def test_preview_reads(self):
+        previews = read_access.preview_reads(self.dataset, limit=10, offset=0)
+        self.assertEqual(len(previews), 2)
+        self.assertEqual(previews[0]["identifier"], "r1")
+        self.assertEqual(previews[0]["length"], 8)
+
+    def test_get_reads_at_batch_single_pass(self):
+        reads = read_access.get_reads_at(self.dataset, [1, 0])
+        self.assertEqual(reads[0].identifier, "r1")
+        self.assertEqual(reads[1].identifier, "r2")
+
+
+class AlignmentApiTests(TestCase):
+    """Tests d'intégration des endpoints Lot 2 (lecture par index, création)."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.dataset = Dataset.objects.create(
+            name="ds",
+            original_filename="ds.fastq",
+            file=SimpleUploadedFile("ds.fastq", FASTQ_TWO_READS.encode()),
+            input_format=Dataset.Format.FASTQ,
+        )
+
+    def test_list_reads_preview(self):
+        res = self.client.get(f"/api/datasets/{self.dataset.id}/reads/")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.data), 2)
+
+    def test_read_at_index(self):
+        res = self.client.get(f"/api/datasets/{self.dataset.id}/reads/1/")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["identifier"], "r2")
+        self.assertEqual(res.data["sequence"], "CCCCGGGG")
+
+    def test_read_at_index_out_of_range(self):
+        res = self.client.get(f"/api/datasets/{self.dataset.id}/reads/9/")
+        self.assertEqual(res.status_code, 404)
+
+    def test_list_reads_rejects_non_numeric_limit(self):
+        res = self.client.get(f"/api/datasets/{self.dataset.id}/reads/?limit=abc")
+        self.assertEqual(res.status_code, 400)
+
+    def test_list_reads_rejects_negative_offset(self):
+        res = self.client.get(f"/api/datasets/{self.dataset.id}/reads/?offset=-1")
+        self.assertEqual(res.status_code, 400)
+
+    def test_create_alignment_from_dataset_reads(self):
+        payload = {
+            "read_a": {"dataset": self.dataset.id, "index": 0},
+            "read_b": {"dataset": self.dataset.id, "index": 1},
+        }
+        res = self.client.post("/api/alignments/", payload, format="json")
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.data["score"], 4)
+        self.assertEqual(AlignmentRun.objects.count(), 1)
+
+    def test_create_alignment_from_manual_sequences(self):
+        payload = {
+            "read_a": {"sequence": "AAAACCCC"},
+            "read_b": {"sequence": "CCCCGGGG"},
+        }
+        res = self.client.post("/api/alignments/", payload, format="json")
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.data["score"], 4)
+        self.assertIsNone(res.data["dataset_a"])
+
+    def test_create_alignment_rejects_both_modes(self):
+        payload = {
+            "read_a": {"dataset": self.dataset.id, "index": 0, "sequence": "ACGT"},
+            "read_b": {"sequence": "CCCCGGGG"},
+        }
+        res = self.client.post("/api/alignments/", payload, format="json")
+        self.assertEqual(res.status_code, 400)
+
+    def test_create_alignment_rejects_too_long_sequence(self):
+        payload = {
+            "read_a": {"sequence": "A" * 5001},
+            "read_b": {"sequence": "CCCCGGGG"},
+        }
+        res = self.client.post("/api/alignments/", payload, format="json")
+        self.assertEqual(res.status_code, 400)
+
+    def test_create_alignment_rejects_combined_size_too_costly(self):
+        # chaque read est sous la limite individuelle (5000 nt) mais le
+        # produit des deux longueurs dépasse alignment.MAX_CELLS
+        payload = {
+            "read_a": {"sequence": "A" * 3000},
+            "read_b": {"sequence": "A" * 3000},
+        }
+        res = self.client.post("/api/alignments/", payload, format="json")
+        self.assertEqual(res.status_code, 400)
+
+    def test_create_alignment_same_dataset_reads_file_once(self):
+        payload = {
+            "read_a": {"dataset": self.dataset.id, "index": 0},
+            "read_b": {"dataset": self.dataset.id, "index": 1},
+        }
+        with patch(
+            "back.views.read_access.get_reads_at", wraps=read_access.get_reads_at
+        ) as batch, patch("back.views.read_access.get_read_at") as single:
+            res = self.client.post("/api/alignments/", payload, format="json")
+        self.assertEqual(res.status_code, 201)
+        batch.assert_called_once()
+        single.assert_not_called()
+
+    def test_list_alignment_history(self):
+        AlignmentRun.objects.create(
+            read_a_label="A", read_a_sequence="AAAA",
+            read_b_label="B", read_b_sequence="AAAA",
+            score=4, aligned_a="AAAA", match_line="||||", aligned_b="AAAA",
+        )
+        res = self.client.get("/api/alignments/")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(res.data), 1)
