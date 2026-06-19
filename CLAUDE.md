@@ -67,7 +67,7 @@ Le logiciel sera considéré comme validé si, à partir d'un fichier de 10 000 
 
 - **Lot 1** : terminé (backend + frontend + tests + revue de code). Voir [docs/LOT1_PLAN.md](docs/LOT1_PLAN.md).
 - **Lot 2** : terminé (backend + frontend + tests + vérification navigateur + revue de code). Voir [docs/LOT2.md](docs/LOT2.md) pour le plan détaillé. Algorithme implémenté : alignement de chevauchement à bords libres (et non une LCS classique), conformément aux précisions validées dans LOT2.md §0-1. Garde-fou ajouté en revue : combinaison de longueurs trop coûteuse (n×m > 4M cellules) rejetée avant calcul.
-- **Lot 3** : non démarré.
+- **Lot 3** : terminé (backend + frontend + tests + build frontend + revue de code). Voir [docs/LOT3.md](docs/LOT3.md) (plan) et [docs/LOT3_ANALYSE.md](docs/LOT3_ANALYSE.md) (rapport : faux positifs, mémoire Bloom vs dict, complexité). Filtre de Bloom implémenté **from scratch** (Python pur) servant d'oracle de connectivité ; graphe de de Bruijn jamais matérialisé (extensions A/C/G/T testées à la volée). Recette validée par test (toy dataset reconstruit ≥ 98 % d'identité, identité calculée en réutilisant l'alignement du Lot 2).
 
 ## Stack du projet
 
