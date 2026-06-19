@@ -6,8 +6,9 @@ import {
 } from '@mui/material'
 import DownloadIcon from '@mui/icons-material/Download'
 import ScatterPlotIcon from '@mui/icons-material/ScatterPlot'
-import { getDataset, getQualityReport, convertToFasta } from '../api/api'
+import { getDataset, getQualityReport, convertToFasta, extractErrorMessage } from '../api/api'
 import QualityChart from '../components/QualityChart'
+import ErrorDialog from '../components/ErrorDialog'
 
 // Carte de statistique en Tailwind (affichage)
 function StatCard({ label, value }) {
@@ -32,6 +33,7 @@ export default function DatasetDetailPage() {
   const [minLength, setMinLength] = useState('')
   const [conversion, setConversion] = useState(null)
   const [converting, setConverting] = useState(false)
+  const [convertErrorDialog, setConvertErrorDialog] = useState(null)
 
   useEffect(() => {
     Promise.all([getDataset(id), getQualityReport(id).catch(() => null)])
@@ -41,14 +43,14 @@ export default function DatasetDetailPage() {
   }, [id])
 
   const handleConvert = async () => {
-    setConverting(true); setError(null); setConversion(null)
+    setConverting(true); setConvertErrorDialog(null); setConversion(null)
     try {
       const params = { min_mean_quality: Number(minQuality) }
       if (minLength !== '') params.min_length = Number(minLength)
       const res = await convertToFasta(id, params)
       setConversion(res.data)
     } catch (err) {
-      setError(err?.response?.data ? JSON.stringify(err.response.data) : 'Échec de la conversion.')
+      setConvertErrorDialog(extractErrorMessage(err, 'Échec de la conversion.'))
     } finally {
       setConverting(false)
     }
@@ -75,6 +77,9 @@ export default function DatasetDetailPage() {
       </Stack>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {dataset.status === 'ERROR' && dataset.error_message && (
+        <Alert severity="error" sx={{ mb: 2 }}>{dataset.error_message}</Alert>
+      )}
 
       {/* --- Rapport qualité (Q1) --- */}
       <Typography variant="h6" gutterBottom>Rapport qualité</Typography>
@@ -130,6 +135,13 @@ export default function DatasetDetailPage() {
           )}
         </Paper>
       )}
+
+      <ErrorDialog
+        open={!!convertErrorDialog}
+        onClose={() => setConvertErrorDialog(null)}
+        title="Erreur de conversion"
+        message={convertErrorDialog}
+      />
     </Box>
   )
 }
