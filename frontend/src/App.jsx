@@ -14,6 +14,9 @@ import SpectrumPage from './pages/SpectrumPage'
 import AlignmentPage from './pages/AlignmentPage'
 import AlignmentHistoryPage from './pages/AlignmentHistoryPage'
 import AlignmentDetailPage from './pages/AlignmentDetailPage'
+import AssemblyPage from './pages/AssemblyPage'
+import AssemblyHistoryPage from './pages/AssemblyHistoryPage'
+import AssemblyAnalysisPage from './pages/AssemblyAnalysisPage'
 
 function App() {
   return (
@@ -29,6 +32,8 @@ function App() {
           <Button color="inherit" component={RouterLink} to="/upload">Importer</Button>
           <Button color="inherit" component={RouterLink} to="/alignment">Alignement</Button>
           <Button color="inherit" component={RouterLink} to="/alignments">Historique</Button>
+          <Button color="inherit" component={RouterLink} to="/assembly">Assemblage</Button>
+          <Button color="inherit" component={RouterLink} to="/assemblies">Assemblages</Button>
         </Toolbar>
       </AppBar>
 
@@ -42,6 +47,9 @@ function App() {
           <Route path="/alignment" element={<AlignmentPage />} />
           <Route path="/alignments" element={<AlignmentHistoryPage />} />
           <Route path="/alignments/:id" element={<AlignmentDetailPage />} />
+          <Route path="/assembly" element={<AssemblyPage />} />
+          <Route path="/assemblies" element={<AssemblyHistoryPage />} />
+          <Route path="/assemblies/:id/analysis" element={<AssemblyAnalysisPage />} />
         </Routes>
       </main>
     </div>
