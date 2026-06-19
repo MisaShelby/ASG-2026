@@ -273,3 +273,43 @@ class AlignmentApiTests(TestCase):
         res = self.client.get("/api/alignments/")
         self.assertEqual(res.status_code, 200)
         self.assertEqual(len(res.data), 1)
+
+
+from .services import bloom
+
+
+class BloomFilterTests(TestCase):
+    def test_no_false_negatives(self):
+        bf = bloom.BloomFilter(num_bits=10_000, num_hashes=4)
+        items = [f"ACGT{i}" for i in range(500)]
+        for it in items:
+            bf.add(it)
+        for it in items:
+            self.assertIn(it, bf)
+
+    def test_membership_false_before_add(self):
+        bf = bloom.BloomFilter(num_bits=10_000, num_hashes=4)
+        bf.add("AAAA")
+        # Un element non insere est tres probablement absent avec ce dimensionnement.
+        self.assertNotIn("TTTT", bf)
+
+    def test_byte_size_matches_bits(self):
+        bf = bloom.BloomFilter(num_bits=16, num_hashes=3)
+        self.assertEqual(bf.byte_size(), 2)  # 16 bits = 2 octets
+
+    def test_estimated_fp_rate_increases_with_load(self):
+        bf = bloom.BloomFilter(num_bits=1_000, num_hashes=3)
+        low = bf.estimated_fp_rate(50)
+        high = bf.estimated_fp_rate(500)
+        self.assertTrue(0.0 <= low < high < 1.0)
+
+    def test_optimal_params(self):
+        m, k = bloom.optimal_params(n=1000, p=0.01)
+        self.assertGreater(m, 1000)
+        self.assertGreaterEqual(k, 1)
+
+    def test_invalid_params_raise(self):
+        with self.assertRaises(ValueError):
+            bloom.BloomFilter(num_bits=0, num_hashes=1)
+        with self.assertRaises(ValueError):
+            bloom.BloomFilter(num_bits=10, num_hashes=0)
