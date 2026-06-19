@@ -47,6 +47,21 @@ class FastqParserTests(TestCase):
         self.assertEqual(len(reads), 2)
         self.assertEqual(reads[0].sequence, "ATGCATGC")
 
+    def test_parse_fastq_invalid_character(self):
+        bad = "@r\nATGX\n+\nIIII\n"
+        with self.assertRaises(ValueError):
+            list(parse_fastq(io.StringIO(bad)))
+
+    def test_parse_fastq_accepts_n_base(self):
+        ok = "@r\nATGN\n+\nIIII\n"
+        reads = list(parse_fastq(io.StringIO(ok)))
+        self.assertEqual(reads[0].sequence, "ATGN")
+
+    def test_parse_fasta_invalid_character(self):
+        bad = ">r1\nATG/CGT\n"
+        with self.assertRaises(ValueError):
+            list(parse_fasta(io.StringIO(bad)))
+
 
 class QualityTests(TestCase):
     def test_quality_report(self):

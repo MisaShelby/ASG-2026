@@ -13,6 +13,7 @@ FASTA : 2 lignes par read
 from dataclasses import dataclass
 
 PHRED_OFFSET = 33
+ALLOWED_BASES = frozenset("ACGTN")
 
 
 @dataclass
@@ -29,11 +30,27 @@ def decode_quality(quality_line: str) -> list[int]:
     return [ord(c) - PHRED_OFFSET for c in quality_line]
 
 
+def _validate_bases(seq: str, header: str) -> None:
+    """Vérifie que la séquence ne contient que des bases ACGTN.
+
+    Lève ValueError listant les caractères rejetés (ex: '/', 'X', '9', '%').
+    `seq` doit déjà être en majuscules.
+    """
+    invalid = sorted(set(seq) - ALLOWED_BASES)
+    if invalid:
+        raise ValueError(
+            f"Read invalide {header!r} : caractère(s) non autorisé(s) dans la "
+            f"séquence : {', '.join(invalid)} (bases acceptées : A, C, G, T, N)"
+        )
+
+
 def parse_fastq(handle):
     """Itère sur les reads d'un fichier FASTQ.
 
     `handle` est un itérable de lignes (fichier texte ouvert).
-    Lève ValueError si la structure 4-lignes est invalide.
+    Lève ValueError si la structure 4-lignes est invalide, si la longueur
+    séquence/qualité diffère, ou si la séquence contient des caractères hors
+    de l'alphabet ACGTN.
     """
     while True:
         header = handle.readline()
@@ -56,29 +73,41 @@ def parse_fastq(handle):
                 f"Séquence ({len(seq)}) et qualité ({len(qual)}) de longueurs différentes "
                 f"pour le read {header!r}"
             )
+        seq = seq.upper()
+        _validate_bases(seq, header)
 
         yield Read(
             identifier=header[1:],
-            sequence=seq.upper(),
+            sequence=seq,
             qualities=decode_quality(qual),
         )
 
 
 def parse_fasta(handle):
-    """Itère sur les reads d'un fichier FASTA (sans qualité)."""
+    """Itère sur les reads d'un fichier FASTA (sans qualité).
+
+    Lève ValueError si une séquence contient des caractères hors de
+    l'alphabet ACGTN.
+    """
+    header = None
     identifier = None
     seq_parts: list[str] = []
     for line in handle:
         line = line.rstrip("\n")
         if line.startswith(">"):
             if identifier is not None:
-                yield Read(identifier, "".join(seq_parts).upper(), [])
+                seq = "".join(seq_parts).upper()
+                _validate_bases(seq, header)
+                yield Read(identifier, seq, [])
+            header = line
             identifier = line[1:]
             seq_parts = []
         elif line:
             seq_parts.append(line)
     if identifier is not None:
-        yield Read(identifier, "".join(seq_parts).upper(), [])
+        seq = "".join(seq_parts).upper()
+        _validate_bases(seq, header)
+        yield Read(identifier, seq, [])
 
 
 def parse(handle, input_format: str):
