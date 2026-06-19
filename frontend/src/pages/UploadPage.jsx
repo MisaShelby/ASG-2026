@@ -4,19 +4,22 @@ import {
   Paper, Typography, TextField, MenuItem, Button, Box, Stack, Alert,
 } from '@mui/material'
 import UploadFileIcon from '@mui/icons-material/UploadFile'
-import { uploadDataset } from '../api/api'
+import { uploadDataset, extractErrorMessage } from '../api/api'
+import ErrorDialog from '../components/ErrorDialog'
 
 export default function UploadPage() {
   const [name, setName] = useState('')
   const [format, setFormat] = useState('FASTQ')
   const [file, setFile] = useState(null)
   const [error, setError] = useState(null)
+  const [errorDialog, setErrorDialog] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError(null)
+    setErrorDialog(null)
     if (!file) { setError('Sélectionnez un fichier.'); return }
     const formData = new FormData()
     formData.append('name', name)
@@ -25,11 +28,13 @@ export default function UploadPage() {
     setSubmitting(true)
     try {
       const res = await uploadDataset(formData)
-      navigate(`/datasets/${res.data.id}`)
+      if (res.data.status === 'ERROR') {
+        setErrorDialog(res.data.error_message || "Échec de l'import : fichier invalide.")
+      } else {
+        navigate(`/datasets/${res.data.id}`)
+      }
     } catch (err) {
-      setError(err?.response?.data
-        ? JSON.stringify(err.response.data)
-        : "Échec de l'import.")
+      setErrorDialog(extractErrorMessage(err, "Échec de l'import."))
     } finally {
       setSubmitting(false)
     }
@@ -60,6 +65,12 @@ export default function UploadPage() {
           </Stack>
         </form>
       </Paper>
+      <ErrorDialog
+        open={!!errorDialog}
+        onClose={() => setErrorDialog(null)}
+        title="Erreur d'import"
+        message={errorDialog}
+      />
     </Box>
   )
 }
