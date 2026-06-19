@@ -129,6 +129,31 @@ class DatasetIngestApiTests(TestCase):
         self.assertEqual(response.data["error_message"], "")
 
 
+class ConvertApiTests(TestCase):
+    """Vérifie que la conversion FASTQ->FASTA échoue proprement (400) sur un
+    fichier invalide, au lieu de planter en 500."""
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_convert_invalid_file_returns_400(self):
+        # Dataset créé directement (sans passer par l'upload/_ingest) pour
+        # simuler un fichier devenu invalide sur disque.
+        dataset = Dataset.objects.create(
+            name="bad",
+            original_filename="bad.fastq",
+            file=SimpleUploadedFile("bad.fastq", b"@r1\nATGX\n+\nIIII\n"),
+            input_format=Dataset.Format.FASTQ,
+        )
+        response = self.client.post(
+            f"/api/datasets/{dataset.id}/convert/",
+            {"min_mean_quality": 0},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("X", response.data["detail"])
+
+
 class KmerTests(TestCase):
     def test_count_and_spectrum(self):
         reads = list(parse_fastq(io.StringIO(FASTQ_SAMPLE)))

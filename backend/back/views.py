@@ -121,10 +121,13 @@ class DatasetViewSet(viewsets.ModelViewSet):
         min_length = serializer.validated_data.get("min_length")
 
         out_buffer = io.StringIO()
-        with dataset.file.open("rt") as handle:
-            kept, discarded = fasta_converter.convert_fastq_to_fasta(
-                handle, out_buffer, min_mean_quality, min_length
-            )
+        try:
+            with dataset.file.open("rt") as handle:
+                kept, discarded = fasta_converter.convert_fastq_to_fasta(
+                    handle, out_buffer, min_mean_quality, min_length
+                )
+        except ValueError as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         conversion = FastaConversion(
             dataset=dataset,
