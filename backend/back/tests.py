@@ -363,3 +363,67 @@ class AssemblyTraversalTests(TestCase):
         contig = assembly.build_contig("ACG", oracle, visited)
         # successeur unique CGT deja visite -> on ne l'etend pas
         self.assertEqual(contig, "ACG")
+
+
+class AssemblyEngineTests(TestCase):
+    @staticmethod
+    def _fragment(sequence, read_len, step):
+        """Decoupe une sequence en reads chevauchants (objets a attribut .sequence)."""
+        class _R:
+            def __init__(self, s):
+                self.sequence = s
+        return [
+            _R(sequence[i : i + read_len])
+            for i in range(0, len(sequence) - read_len + 1, step)
+        ]
+
+    def test_identity_perfect(self):
+        ref = "ACGTACGTACGTACGT"
+        self.assertEqual(assembly.identity_to_reference(ref, ref), 1.0)
+
+    def test_identity_empty(self):
+        self.assertEqual(assembly.identity_to_reference("", "ACGT"), 0.0)
+
+    def test_assemble_reconstructs_toy_sequence(self):
+        target = (
+            "ACGTGACCTGATTACAGGTCAGTTCACGATCCGATTACAGGCATTAGCATGACTTAGCCA"
+            "TGCATTGACCATGCATGCATTAGCATGCATTAGGCATGACTTAGCATGCATTGACATGCA"
+        )
+        reads = self._fragment(target, read_len=20, step=2)
+        result = assembly.assemble(
+            reads, k=11, threshold=1, num_bits=200_000, num_hashes=4,
+            reference=target,
+        )
+        self.assertGreaterEqual(result["stats"]["best_identity"], 0.98)
+
+    def test_assemble_stats_present(self):
+        target = "ACGTGACCTGATTACAGGTCAGTTCACGATCCGATTACAGG"
+        reads = self._fragment(target, read_len=15, step=2)
+        result = assembly.assemble(
+            reads, k=9, threshold=1, num_bits=100_000, num_hashes=4,
+        )
+        stats = result["stats"]
+        for key in (
+            "distinct_kmers", "solid_kmers", "bloom_fp_rate", "bloom_bytes",
+            "dict_bytes_estimate", "num_contigs", "max_contig_length",
+            "total_contig_length", "best_identity",
+        ):
+            self.assertIn(key, stats)
+        self.assertIsNone(stats["best_identity"])  # pas de reference fournie
+        self.assertGreater(stats["bloom_bytes"], 0)
+
+    def test_assemble_threshold_filters_errors(self):
+        # Un read erronne minoritaire ne doit pas creer de k-mers solides au seuil 2
+        target = "ACGTGACCTGATTACAGGTCAGTTCACG"
+        reads = self._fragment(target, read_len=12, step=1) * 3  # cible repetee
+        noise = "GACTGCATCGTA"  # 9-mers tous distincts, hors cible
+        reads += [type(reads[0])(noise)]  # un read bruit, vu une seule fois
+        result = assembly.assemble(
+            reads, k=9, threshold=2, num_bits=100_000, num_hashes=4,
+        )
+        # "GACTGCATC" n'apparait qu'une fois -> non solide -> absent des contigs
+        self.assertFalse(any("GACTGCATC" in c["sequence"] for c in result["contigs"]))
+
+    def test_assemble_invalid_k(self):
+        with self.assertRaises(ValueError):
+            assembly.assemble([], k=1, threshold=1, num_bits=10, num_hashes=1)
