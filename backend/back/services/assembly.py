@@ -117,9 +117,14 @@ def assemble(
     best_identity = None
     contigs = []
     for index, sequence in enumerate(raw_contigs):
-        identity = (
-            identity_to_reference(sequence, reference) if reference else None
-        )
+        # Garde-fou identique à celui du Lot 2 (vue d'alignement) : la table DP
+        # de overlap_align est en O(n·m) pur Python. Au-delà de MAX_CELLS on
+        # saute le calcul d'identité pour ce contig (identity=None) plutôt que
+        # de bloquer la requête synchrone.
+        if reference and len(sequence) * len(reference) <= alignment.MAX_CELLS:
+            identity = identity_to_reference(sequence, reference)
+        else:
+            identity = None
         if identity is not None:
             best_identity = (
                 identity if best_identity is None

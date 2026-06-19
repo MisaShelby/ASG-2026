@@ -214,3 +214,10 @@ class AssemblyCreateSerializer(serializers.Serializer):
     reference_sequence = serializers.CharField(
         required=False, allow_blank=True, trim_whitespace=True
     )
+
+    def validate_reference_sequence(self, value):
+        # Normalisation cohérente avec ReadInputSerializer (Lot 2) : on retire
+        # tout blanc interne (retours à la ligne d'un FASTA collé) et on met en
+        # majuscules, car les contigs sont construits à partir de reads en
+        # majuscules (fastq_parser applique .upper()).
+        return "".join(value.split()).upper()

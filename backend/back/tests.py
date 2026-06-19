@@ -482,6 +482,24 @@ class AssemblyApiTests(TestCase):
         self.assertGreaterEqual(len(data["contigs"]), 1)
         self.assertIn("bloom_bytes", data)
 
+    def test_reference_with_newlines_and_lowercase_is_normalized(self):
+        # Reference collee facon FASTA multi-lignes + minuscules : doit etre
+        # normalisee (sans blancs internes, en majuscules) avant l'alignement,
+        # sinon l'identite serait faussee par les retours a la ligne / la casse.
+        messy_ref = "\n".join(
+            self.target[i : i + 30].lower() for i in range(0, len(self.target), 30)
+        )
+        resp = self.client.post(
+            "/api/assemblies/",
+            {
+                "dataset": self.dataset.id, "k": 11, "solidity_threshold": 1,
+                "reference_sequence": messy_ref,
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertGreaterEqual(resp.json()["best_identity"], 0.98)
+
     def test_list_assemblies(self):
         self.client.post(
             "/api/assemblies/",
