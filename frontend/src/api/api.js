@@ -4,6 +4,17 @@ const api = axios.create({
     baseURL: import.meta.env.VITE_API_URL,
 });
 
+export function extractErrorMessage(err, fallback) {
+    const data = err?.response?.data
+    if (!data) return fallback
+    if (typeof data === 'string') return data
+    if (data.detail) return data.detail
+    if (data.error_message) return data.error_message
+    const firstKey = Object.keys(data)[0]
+    if (firstKey && Array.isArray(data[firstKey])) return data[firstKey][0]
+    return fallback
+}
+
 // --- Q1 : Datasets, qualité, conversion ---
 export const listDatasets = () => api.get("/datasets/");
 export const getDataset = (id) => api.get(`/datasets/${id}/`);
