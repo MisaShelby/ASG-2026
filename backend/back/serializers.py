@@ -2,6 +2,8 @@ from rest_framework import serializers
 
 from .models import (
     AlignmentRun,
+    AssemblyRun,
+    Contig,
     Dataset,
     FastaConversion,
     KmerAnalysis,
@@ -173,3 +175,42 @@ class AlignmentRunSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+
+class ContigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Contig
+        fields = ["index", "sequence", "length", "identity_to_reference"]
+
+
+class AssemblyRunSerializer(serializers.ModelSerializer):
+    contigs = ContigSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = AssemblyRun
+        fields = [
+            "id", "dataset", "source", "k", "solidity_threshold",
+            "bloom_bits", "num_hashes", "distinct_kmers", "solid_kmers",
+            "bloom_fp_rate", "bloom_bytes", "dict_bytes_estimate",
+            "num_contigs", "max_contig_length", "total_contig_length",
+            "reference_sequence", "best_identity", "status", "created_at",
+            "contigs",
+        ]
+
+
+class AssemblyCreateSerializer(serializers.Serializer):
+    dataset = serializers.PrimaryKeyRelatedField(queryset=Dataset.objects.all())
+    source = serializers.ChoiceField(
+        choices=AssemblyRun.Source.choices, default=AssemblyRun.Source.RAW
+    )
+    k = serializers.IntegerField(min_value=2, max_value=64)
+    solidity_threshold = serializers.IntegerField(min_value=1, default=2)
+    bloom_bits = serializers.IntegerField(
+        min_value=8, max_value=200_000_000, required=False
+    )
+    num_hashes = serializers.IntegerField(
+        min_value=1, max_value=20, required=False
+    )
+    reference_sequence = serializers.CharField(
+        required=False, allow_blank=True, trim_whitespace=True
+    )

@@ -1,7 +1,7 @@
 import io
 
 from django.core.files.base import ContentFile
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponse
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -9,6 +9,8 @@ from rest_framework.response import Response
 
 from .models import (
     AlignmentRun,
+    AssemblyRun,
+    Contig,
     Dataset,
     FastaConversion,
     KmerAnalysis,
@@ -20,6 +22,8 @@ from .serializers import (
     MAX_READ_LENGTH,
     AlignmentCreateSerializer,
     AlignmentRunSerializer,
+    AssemblyCreateSerializer,
+    AssemblyRunSerializer,
     DatasetSerializer,
     DatasetUploadSerializer,
     FastaConversionSerializer,
@@ -30,7 +34,15 @@ from .serializers import (
     ReadDetailSerializer,
     ReadPreviewSerializer,
 )
-from .services import alignment, fasta_converter, kmer, quality, read_access
+from .services import (
+    alignment,
+    assembly,
+    bloom,
+    fasta_converter,
+    kmer,
+    quality,
+    read_access,
+)
 from .services.fastq_parser import parse
 
 TOP_N = 1000
@@ -333,3 +345,85 @@ class AlignmentRunViewSet(viewsets.ModelViewSet):
                 )
             return f"{dataset.name} — read #{index}", read.sequence, dataset, index
         return f"Read {letter.upper()} (manuel)", data["sequence"], None, None
+
+
+class AssemblyRunViewSet(viewsets.ModelViewSet):
+    """Lot 3 — Assemblage de novo via graphe de de Bruijn implicite + Bloom."""
+
+    queryset = AssemblyRun.objects.all()
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return AssemblyCreateSerializer
+        return AssemblyRunSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = AssemblyCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        dataset = data["dataset"]
+        k = data["k"]
+        threshold = data["solidity_threshold"]
+        reference = data.get("reference_sequence", "") or ""
+
+        reads = read_access.load_reads(dataset)
+
+        # Dimensionnement par défaut du Bloom si non fourni : ~1% de FP sur une
+        # borne haute du nombre de k-mers distincts.
+        num_bits = data.get("bloom_bits")
+        num_hashes = data.get("num_hashes")
+        if num_bits is None or num_hashes is None:
+            upper = max(
+                1, sum(max(0, len(r.sequence) - k + 1) for r in reads)
+            )
+            opt_bits, opt_hashes = bloom.optimal_params(upper, 0.01)
+            num_bits = num_bits or opt_bits
+            num_hashes = num_hashes or opt_hashes
+
+        result = assembly.assemble(
+            reads, k=k, threshold=threshold,
+            num_bits=num_bits, num_hashes=num_hashes,
+            reference=reference or None,
+        )
+        stats = result["stats"]
+
+        run = AssemblyRun.objects.create(
+            dataset=dataset, source=data["source"], k=k,
+            solidity_threshold=threshold, bloom_bits=num_bits,
+            num_hashes=num_hashes, reference_sequence=reference,
+            distinct_kmers=stats["distinct_kmers"],
+            solid_kmers=stats["solid_kmers"],
+            bloom_fp_rate=stats["bloom_fp_rate"],
+            bloom_bytes=stats["bloom_bytes"],
+            dict_bytes_estimate=stats["dict_bytes_estimate"],
+            num_contigs=stats["num_contigs"],
+            max_contig_length=stats["max_contig_length"],
+            total_contig_length=stats["total_contig_length"],
+            best_identity=stats["best_identity"],
+        )
+        Contig.objects.bulk_create(
+            Contig(
+                assembly=run, index=c["index"], sequence=c["sequence"],
+                length=c["length"], identity_to_reference=c["identity"],
+            )
+            for c in result["contigs"]
+        )
+        return Response(
+            AssemblyRunSerializer(run).data, status=status.HTTP_201_CREATED
+        )
+
+    @action(detail=True, methods=["get"], url_path="contigs.fasta")
+    def contigs_fasta(self, request, pk=None):
+        run = self.get_object()
+        lines = []
+        for c in run.contigs.all():
+            lines.append(f">contig_{c.index} len={c.length}")
+            lines.append(c.sequence)
+        content = "\n".join(lines) + "\n"
+        resp = HttpResponse(content, content_type="text/plain; charset=utf-8")
+        resp["Content-Disposition"] = (
+            f'attachment; filename="assembly_{run.id}_contigs.fasta"'
+        )
+        return resp

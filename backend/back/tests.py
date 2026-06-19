@@ -446,3 +446,69 @@ class AssemblyModelTests(TestCase):
         )
         self.assertEqual(run.contigs.count(), 1)
         self.assertEqual(run.contigs.first().index, 0)
+
+
+class AssemblyApiTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        target = (
+            "ACGTGACCTGATTACAGGTCAGTTCACGATCCGATTACAGGCATTAGCATGACTTAGCCA"
+            "TGCATTGACCATGCATGCATTAGCATGCATTAGGCATGACTTAGCATGCATTGACATGCA"
+        )
+        reads = [target[i : i + 20] for i in range(0, len(target) - 20 + 1, 2)]
+        fastq = "".join(
+            f"@r{i}\n{seq}\n+\n{'I' * len(seq)}\n" for i, seq in enumerate(reads)
+        )
+        self.dataset = Dataset.objects.create(
+            name="toy", original_filename="toy.fastq",
+            file=SimpleUploadedFile("toy.fastq", fastq.encode()),
+            input_format="FASTQ",
+        )
+        self.target = target
+
+    def test_create_assembly(self):
+        resp = self.client.post(
+            "/api/assemblies/",
+            {
+                "dataset": self.dataset.id, "source": "RAW", "k": 11,
+                "solidity_threshold": 1, "bloom_bits": 200000, "num_hashes": 4,
+                "reference_sequence": self.target,
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201, resp.content)
+        data = resp.json()
+        self.assertGreaterEqual(data["best_identity"], 0.98)
+        self.assertGreaterEqual(len(data["contigs"]), 1)
+        self.assertIn("bloom_bytes", data)
+
+    def test_list_assemblies(self):
+        self.client.post(
+            "/api/assemblies/",
+            {"dataset": self.dataset.id, "k": 11, "solidity_threshold": 1},
+            format="json",
+        )
+        resp = self.client.get("/api/assemblies/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertGreaterEqual(len(resp.json()), 1)
+
+    def test_invalid_k_rejected(self):
+        resp = self.client.post(
+            "/api/assemblies/",
+            {"dataset": self.dataset.id, "k": 1, "solidity_threshold": 1},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_download_contigs_fasta(self):
+        create = self.client.post(
+            "/api/assemblies/",
+            {"dataset": self.dataset.id, "k": 11, "solidity_threshold": 1},
+            format="json",
+        )
+        run_id = create.json()["id"]
+        resp = self.client.get(
+            f"/api/assemblies/{run_id}/contigs.fasta", follow=True
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b">contig_0", resp.content)

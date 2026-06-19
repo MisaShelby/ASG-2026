@@ -31,6 +31,13 @@ def get_reads_at(dataset, indices: list[int]) -> dict[int, object]:
     return found
 
 
+def load_reads(dataset) -> list:
+    """Charge tous les `Read` d'un dataset en mémoire (un seul passage du
+    fichier). Utilisé par l'assemblage, qui a besoin de l'ensemble des reads."""
+    with dataset.file.open("rt") as handle:
+        return list(parse(handle, dataset.input_format))
+
+
 def preview_reads(dataset, limit: int = 50, offset: int = 0) -> list[dict]:
     """Aperçu paginé des reads d'un dataset : index, identifiant, longueur,
     début de séquence (pour un sélecteur frontend, sans tout charger).
