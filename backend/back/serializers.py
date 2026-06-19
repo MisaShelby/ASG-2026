@@ -30,9 +30,12 @@ class DatasetSerializer(serializers.ModelSerializer):
             "input_format",
             "total_reads",
             "status",
+            "error_message",
             "created_at",
         ]
-        read_only_fields = ["original_filename", "total_reads", "status", "created_at"]
+        read_only_fields = [
+            "original_filename", "total_reads", "status", "error_message", "created_at",
+        ]
 
 
 class DatasetUploadSerializer(serializers.ModelSerializer):
@@ -40,7 +43,8 @@ class DatasetUploadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Dataset
-        fields = ["id", "name", "file", "input_format"]
+        fields = ["id", "name", "file", "input_format", "status", "error_message"]
+        read_only_fields = ["status", "error_message"]
 
 
 class FastaConversionSerializer(serializers.ModelSerializer):

@@ -70,6 +70,7 @@ class DatasetViewSet(viewsets.ModelViewSet):
 
         Un fichier mal formé (ValueError) marque le dataset en ERROR sans
         faire échouer l'upload ; les autres erreurs (serveur) remontent.
+        Le message d'erreur est conservé pour affichage côté frontend.
         """
         try:
             with dataset.file.open("rt") as handle:
@@ -81,11 +82,14 @@ class DatasetViewSet(viewsets.ModelViewSet):
                 dataset=dataset, defaults=report
             )
             dataset.status = Dataset.Status.DONE
-        except ValueError:
+            dataset.error_message = ""
+        except ValueError as exc:
             # Fichier invalide / format incorrect : erreur côté utilisateur.
             dataset.status = Dataset.Status.ERROR
+            dataset.error_message = str(exc)
         except Exception:
             dataset.status = Dataset.Status.ERROR
+            dataset.error_message = "Erreur interne lors du traitement du fichier."
             raise
         finally:
             dataset.save()

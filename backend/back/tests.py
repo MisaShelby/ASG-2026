@@ -96,6 +96,39 @@ class FastaConverterTests(TestCase):
         self.assertEqual(discarded, 3)
 
 
+class DatasetIngestApiTests(TestCase):
+    """Vérifie que l'API d'upload renvoie le statut et le message d'erreur."""
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_upload_invalid_read_returns_error_message(self):
+        bad_file = SimpleUploadedFile(
+            "bad.fastq", b"@r1\nATGX\n+\nIIII\n", content_type="text/plain"
+        )
+        response = self.client.post(
+            "/api/datasets/",
+            {"name": "bad", "input_format": "FASTQ", "file": bad_file},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["status"], "ERROR")
+        self.assertIn("X", response.data["error_message"])
+
+    def test_upload_valid_file_has_empty_error_message(self):
+        good_file = SimpleUploadedFile(
+            "good.fastq", b"@r1\nATGC\n+\nIIII\n", content_type="text/plain"
+        )
+        response = self.client.post(
+            "/api/datasets/",
+            {"name": "good", "input_format": "FASTQ", "file": good_file},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["status"], "DONE")
+        self.assertEqual(response.data["error_message"], "")
+
+
 class KmerTests(TestCase):
     def test_count_and_spectrum(self):
         reads = list(parse_fastq(io.StringIO(FASTQ_SAMPLE)))

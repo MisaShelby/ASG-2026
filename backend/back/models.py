@@ -27,6 +27,7 @@ class Dataset(models.Model):
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.UPLOADED
     )
+    error_message = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
