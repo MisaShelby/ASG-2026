@@ -313,3 +313,53 @@ class BloomFilterTests(TestCase):
             bloom.BloomFilter(num_bits=0, num_hashes=1)
         with self.assertRaises(ValueError):
             bloom.BloomFilter(num_bits=10, num_hashes=0)
+
+
+from collections import Counter
+
+from .services import assembly
+
+
+class AssemblyTraversalTests(TestCase):
+    def test_select_solid_kmers(self):
+        counter = Counter({"AAA": 5, "AAC": 1, "ACG": 3})
+        self.assertEqual(
+            assembly.select_solid_kmers(counter, threshold=3),
+            {"AAA", "ACG"},
+        )
+
+    def test_select_solid_kmers_invalid_threshold(self):
+        with self.assertRaises(ValueError):
+            assembly.select_solid_kmers(Counter(), threshold=0)
+
+    def test_successors_and_predecessors(self):
+        oracle = {"ATG", "TGC", "TGA", "CAT"}  # set = oracle de test
+        # successeurs de "CAT" : suffixe "AT" + base -> ATG present, pas ATA/ATC/ATT
+        self.assertEqual(sorted(assembly.successors("CAT", oracle)), ["ATG"])
+        # successeurs de "ATG" : "TG"+base -> TGC, TGA presents (embranchement)
+        self.assertEqual(sorted(assembly.successors("ATG", oracle)), ["TGA", "TGC"])
+        # predecesseurs de "ATG" : base+"AT" -> CAT present
+        self.assertEqual(sorted(assembly.predecessors("ATG", oracle)), ["CAT"])
+
+    def test_build_contig_linear_path(self):
+        # Chaine lineaire de 3-mers couvrant "ACGTAC"
+        oracle = {"ACG", "CGT", "GTA", "TAC"}
+        visited = set()
+        contig = assembly.build_contig("ACG", oracle, visited)
+        self.assertEqual(contig, "ACGTAC")
+        # tous les k-mers du chemin sont marques visites
+        self.assertEqual(visited, oracle)
+
+    def test_build_contig_stops_at_branch(self):
+        # Apres "ACG"->"CGT", "GT" s'etend en GTA et GTC : embranchement -> arret
+        oracle = {"ACG", "CGT", "GTA", "GTC"}
+        visited = set()
+        contig = assembly.build_contig("ACG", oracle, visited)
+        self.assertEqual(contig, "ACGT")  # s'arrete avant la bifurcation
+
+    def test_build_contig_starts_from_visited_is_seed_only(self):
+        oracle = {"ACG", "CGT"}
+        visited = {"CGT"}
+        contig = assembly.build_contig("ACG", oracle, visited)
+        # successeur unique CGT deja visite -> on ne l'etend pas
+        self.assertEqual(contig, "ACG")
