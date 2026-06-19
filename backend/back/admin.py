@@ -2,6 +2,8 @@ from django.contrib import admin
 
 from .models import (
     AlignmentRun,
+    AssemblyRun,
+    Contig,
     Dataset,
     FastaConversion,
     KmerAnalysis,
@@ -56,3 +58,17 @@ class KmerSpectrumBinAdmin(admin.ModelAdmin):
 class AlignmentRunAdmin(admin.ModelAdmin):
     list_display = ("id", "read_a_label", "read_b_label", "score", "created_at")
     search_fields = ("read_a_label", "read_b_label")
+
+
+class ContigInline(admin.TabularInline):
+    model = Contig
+    extra = 0
+
+
+@admin.register(AssemblyRun)
+class AssemblyRunAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "k", "solidity_threshold", "num_contigs",
+        "best_identity", "created_at",
+    )
+    inlines = [ContigInline]

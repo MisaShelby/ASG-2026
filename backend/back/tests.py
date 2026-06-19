@@ -427,3 +427,22 @@ class AssemblyEngineTests(TestCase):
     def test_assemble_invalid_k(self):
         with self.assertRaises(ValueError):
             assembly.assemble([], k=1, threshold=1, num_bits=10, num_hashes=1)
+
+
+from .models import AssemblyRun, Contig
+
+
+class AssemblyModelTests(TestCase):
+    def test_create_assembly_with_contigs(self):
+        run = AssemblyRun.objects.create(
+            source="RAW", k=11, solidity_threshold=2,
+            bloom_bits=200_000, num_hashes=4,
+            distinct_kmers=100, solid_kmers=80, bloom_fp_rate=0.01,
+            bloom_bytes=25_000, dict_bytes_estimate=40_000,
+            num_contigs=1, max_contig_length=120, total_contig_length=120,
+        )
+        Contig.objects.create(
+            assembly=run, index=0, sequence="ACGT" * 30, length=120,
+        )
+        self.assertEqual(run.contigs.count(), 1)
+        self.assertEqual(run.contigs.first().index, 0)

@@ -187,3 +187,47 @@ CREATE INDEX back_alignmentrun_dataset_b_idx ON back_alignmentrun (dataset_b_id)
 COMMENT ON TABLE back_alignmentrun IS 'Alignement de chevauchement (overlap, bords libres) entre deux reads (Lot 2)';
 
 COMMENT ON COLUMN back_alignmentrun.score IS 'Score pondéré : match=+1, mismatch=-1, gap=-2';
+-- =====================================================================
+--  Lot 3 — Assemblage de novo (graphe de de Bruijn implicite + Filtre de Bloom)
+-- =====================================================================
+CREATE TABLE back_assemblyrun (
+    id BIGSERIAL PRIMARY KEY,
+    dataset_id BIGINT NULL, -- source des reads ; l'assemblage survit a la suppression du dataset
+    source VARCHAR(10) NOT NULL DEFAULT 'RAW', -- RAW (reads bruts) | FILTERED (reads filtres)
+    k INTEGER NOT NULL, -- taille des k-mers
+    solidity_threshold INTEGER NOT NULL, -- seuil de frequence pour qu'un k-mer soit "solide"
+    bloom_bits BIGINT NOT NULL, -- m : taille du bitset du filtre de Bloom
+    num_hashes INTEGER NOT NULL, -- k : nombre de fonctions de hachage
+    distinct_kmers BIGINT NOT NULL DEFAULT 0,
+    solid_kmers BIGINT NOT NULL DEFAULT 0, -- nb de k-mers inseres dans le Bloom
+    bloom_fp_rate DOUBLE PRECISION NOT NULL DEFAULT 0, -- taux de faux positifs theorique estime
+    bloom_bytes BIGINT NOT NULL DEFAULT 0, -- memoire reelle du bitset (octets)
+    dict_bytes_estimate BIGINT NOT NULL DEFAULT 0, -- memoire d'un set equivalent (baseline)
+    num_contigs INTEGER NOT NULL DEFAULT 0,
+    max_contig_length INTEGER NOT NULL DEFAULT 0,
+    total_contig_length BIGINT NOT NULL DEFAULT 0,
+    reference_sequence TEXT NOT NULL DEFAULT '', -- sequence de reference optionnelle (validation recette)
+    best_identity DOUBLE PRECISION NULL, -- meilleure identite contig vs reference (0-1)
+    contigs_file VARCHAR(100) NULL, -- FASTA des contigs (telechargement)
+    status VARCHAR(20) NOT NULL DEFAULT 'DONE',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT back_assemblyrun_dataset_fk FOREIGN KEY (dataset_id) REFERENCES back_dataset (id) ON DELETE SET NULL
+);
+
+CREATE INDEX back_assemblyrun_dataset_idx ON back_assemblyrun (dataset_id);
+
+CREATE TABLE back_contig (
+    id BIGSERIAL PRIMARY KEY,
+    assembly_id BIGINT NOT NULL,
+    index INTEGER NOT NULL, -- rang (0 = plus long)
+    sequence TEXT NOT NULL,
+    length INTEGER NOT NULL,
+    identity_to_reference DOUBLE PRECISION NULL, -- identite vs reference (0-1) si reference fournie
+    CONSTRAINT back_contig_assembly_fk FOREIGN KEY (assembly_id) REFERENCES back_assemblyrun (id) ON DELETE CASCADE
+);
+
+CREATE INDEX back_contig_assembly_idx ON back_contig (assembly_id);
+
+COMMENT ON TABLE back_assemblyrun IS 'Run d''assemblage de novo via graphe de de Bruijn implicite + filtre de Bloom (Lot 3)';
+
+COMMENT ON TABLE back_contig IS 'Contig (sequence assemblee) produit par un AssemblyRun (Lot 3)';

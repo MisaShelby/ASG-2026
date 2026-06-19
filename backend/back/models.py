@@ -190,3 +190,73 @@ class AlignmentRun(models.Model):
 
     def __str__(self):
         return f"{self.read_a_label} x {self.read_b_label} (score={self.score})"
+
+
+# =====================================================================
+#  Lot 3 — Assemblage de novo (graphe de de Bruijn implicite + Bloom)
+# =====================================================================
+class AssemblyRun(models.Model):
+    """Un run d'assemblage : paramètres, statistiques et contigs produits."""
+
+    class Source(models.TextChoices):
+        RAW = "RAW", "Reads bruts"
+        FILTERED = "FILTERED", "Reads filtrés"
+
+    class Status(models.TextChoices):
+        DONE = "DONE", "Terminé"
+        ERROR = "ERROR", "Erreur"
+
+    dataset = models.ForeignKey(
+        Dataset, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="assemblies",
+    )
+    source = models.CharField(
+        max_length=10, choices=Source.choices, default=Source.RAW
+    )
+    k = models.IntegerField()
+    solidity_threshold = models.IntegerField()
+    bloom_bits = models.BigIntegerField()
+    num_hashes = models.IntegerField()
+
+    distinct_kmers = models.BigIntegerField(default=0)
+    solid_kmers = models.BigIntegerField(default=0)
+    bloom_fp_rate = models.FloatField(default=0.0)
+    bloom_bytes = models.BigIntegerField(default=0)
+    dict_bytes_estimate = models.BigIntegerField(default=0)
+
+    num_contigs = models.IntegerField(default=0)
+    max_contig_length = models.IntegerField(default=0)
+    total_contig_length = models.BigIntegerField(default=0)
+
+    reference_sequence = models.TextField(blank=True)
+    best_identity = models.FloatField(null=True, blank=True)
+    contigs_file = models.FileField(upload_to="assemblies/", null=True, blank=True)
+
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.DONE
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Assemblage k={self.k} ({self.num_contigs} contigs)"
+
+
+class Contig(models.Model):
+    """Un contig produit par un AssemblyRun."""
+
+    assembly = models.ForeignKey(
+        AssemblyRun, on_delete=models.CASCADE, related_name="contigs"
+    )
+    index = models.IntegerField()
+    sequence = models.TextField()
+    length = models.IntegerField()
+    identity_to_reference = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["index"]
+
+    def __str__(self):
+        return f"Contig #{self.index} ({self.length} nt)"
