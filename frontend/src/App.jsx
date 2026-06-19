@@ -33,7 +33,7 @@ function App() {
           <Button color="inherit" component={RouterLink} to="/alignment">Alignement</Button>
           <Button color="inherit" component={RouterLink} to="/alignments">Historique</Button>
           <Button color="inherit" component={RouterLink} to="/assembly">Assemblage</Button>
-          <Button color="inherit" component={RouterLink} to="/assemblies">Assemblages</Button>
+          <Button color="inherit" component={RouterLink} to="/assemblies">Historique des assemblages</Button>
         </Toolbar>
       </AppBar>
 

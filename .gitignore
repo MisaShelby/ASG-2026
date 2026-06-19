@@ -14,3 +14,8 @@ dist/
 
 # OS
 .DS_Store
+
+# Local-only (non versionné, comme .env)
+.claude/
+docs/
+CLAUDE.md
